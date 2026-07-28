@@ -5,6 +5,9 @@ export interface Zone {
   stability: number;
   transition_flag: boolean;
   candidate_samples: number;
+  symbol: string;
+  spot: number;
+  data_source: string;
 }
 
 export interface CurvePoint {
@@ -29,6 +32,8 @@ export interface Exposure {
   short_gamma_zones: number[];
   greek_stability: number;
   bands: Record<string, string>;
+  symbol: string;
+  data_source: string;
 }
 
 export interface Microstructure {
@@ -45,6 +50,8 @@ export interface Microstructure {
   iv_slope: number;
   vol_of_vol: number;
   term_structure: { expiry: string; iv: number }[];
+  symbol: string;
+  data_source: string;
 }
 
 export interface SignalScores {
@@ -67,4 +74,3 @@ export interface Alert {
 }
 
 export type StreamChannel = "zones" | "exposures" | "micro" | "scores" | "alerts";
-

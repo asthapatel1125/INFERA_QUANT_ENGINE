@@ -16,8 +16,9 @@ copy .env.example .env
 flask --app app run --debug --port 5000
 ```
 
-The backend starts with a deterministic synthetic data provider, so no credentials are
-required for local development. Set `SUPABASE_URL` and `SUPABASE_KEY` to persist data.
+The backend starts with a deterministic synthetic data provider when vendor keys are
+absent. Configure `TWELVEDATA_API_KEY` and `THETADATA_API_KEY` to activate live QQQ
+spot and Options Pro data. Set `SUPABASE_URL` and `SUPABASE_KEY` to persist snapshots.
 
 ### Frontend
 
@@ -46,4 +47,3 @@ See [docs/API.md](docs/API.md) for endpoint details and
 
 > This software is an analytics demonstration, not financial advice or an execution
 > system. Validate all market-data assumptions before production use.
-

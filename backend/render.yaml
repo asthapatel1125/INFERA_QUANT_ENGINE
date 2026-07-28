@@ -13,6 +13,21 @@ services:
         sync: false
       - key: SUPABASE_KEY
         sync: false
-      - key: DATA_PROVIDER_API_KEY
+      - key: DATA_PROVIDER
+        value: live
+      - key: MARKET_SYMBOL
+        value: QQQ
+      - key: TWELVEDATA_API_KEY
         sync: false
-
+      - key: THETADATA_API_KEY
+        sync: false
+      - key: TWELVEDATA_PRICE_TTL
+        value: "60"
+      - key: THETADATA_CHAIN_TTL
+        value: "15"
+      - key: THETADATA_OI_TTL
+        value: "900"
+      - key: THETADATA_MAX_DTE
+        value: "90"
+      - key: THETADATA_STRIKE_RANGE
+        value: "30"

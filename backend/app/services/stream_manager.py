@@ -49,6 +49,19 @@ class StreamManager:
         }
         zone = self.zone_engine.compute(zone_input, timestamp)
         exposures = self.greek_engine.compute(self.provider.option_chain(raw["spot"]), raw["spot"])
+        zone.update({
+            "symbol": raw.get("symbol", ""),
+            "spot": raw["spot"],
+            "data_source": raw.get("data_source", "unknown"),
+        })
+        exposures.update({
+            "symbol": raw.get("symbol", ""),
+            "data_source": raw.get("data_source", "unknown"),
+        })
+        micro.update({
+            "symbol": raw.get("symbol", ""),
+            "data_source": raw.get("data_source", "unknown"),
+        })
         scores = self.signal_engine.compute(exposures, micro)
         alert = self.alert_engine.compute(zone, scores, micro)
         for packet in (micro, exposures, scores, alert):

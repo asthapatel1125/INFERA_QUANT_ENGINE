@@ -38,10 +38,13 @@ source.addEventListener("zones", (event) => {
 
 The default cadence is 1.5 seconds and is controlled by `STREAM_INTERVAL`.
 
-## Connecting a live market-data provider
+## Live vendor integration
 
-Implement an adapter with `snapshot()` and `option_chain(spot)` methods matching
-`SyntheticDataProvider`, then instantiate it in `app/__init__.py`. Normalize provider
-field names at the adapter boundary. Confirm option multipliers, dealer sign convention,
-quote timestamps, and stale-data handling before using live output.
+`VendorDataProvider` uses Twelve Data's `/price` endpoint for the configured underlying
+and ThetaData's direct Python client for all-expiration Greeks, NBBO quotes, last trades,
+and open interest. Vendor calls are cached independently. When a refresh fails, the
+provider records the error in `/health` and temporarily serves synthetic data so SSE
+connections remain alive.
 
+Use `DATA_PROVIDER=live` to require the live-provider path or `DATA_PROVIDER=auto` to
+enable it whenever both API keys are configured.

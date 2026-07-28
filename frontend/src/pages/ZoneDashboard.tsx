@@ -15,7 +15,7 @@ export function ZoneDashboard({ zone, history }: { zone: Zone | null; history: Z
   return (
     <>
       <div className="metric-strip">
-        <div><span>SPX spot</span><strong>5,242.80</strong><em className="up">+0.42%</em></div>
+        <div><span>{zone.symbol} spot</span><strong>{zone.spot.toFixed(2)}</strong><em>{zone.data_source}</em></div>
         <div><span>Current regime</span><strong style={{ color }}>{zone.zone.replace("_", " ")}</strong><em>sample {zone.candidate_samples}/3</em></div>
         <div><span>Zone stability</span><strong>{Math.round(zone.stability * 100)}%</strong><em className="up">confirmed</em></div>
         <div><span>Session</span><strong>Regular</strong><em>12:42:08 ET</em></div>
@@ -54,4 +54,3 @@ export function ZoneDashboard({ zone, history }: { zone: Zone | null; history: Z
     </>
   );
 }
-

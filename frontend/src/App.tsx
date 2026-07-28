@@ -33,7 +33,7 @@ export default function App() {
   const connected = zones.connected || exposures.connected || micro.connected || scores.connected;
 
   return (
-    <Layout page={page} setPage={setPage} connected={connected}>
+    <Layout page={page} setPage={setPage} connected={connected} symbol={zones.data?.symbol || "QQQ"}>
       {page === "zone" && <ZoneDashboard zone={zones.data} history={zones.history} />}
       {page === "dealer" && <DealerFlowDashboard data={exposures.data} />}
       {page === "micro" && <VolMicroDashboard data={micro.data} history={micro.history} />}
@@ -43,4 +43,3 @@ export default function App() {
     </Layout>
   );
 }
-

@@ -15,8 +15,8 @@ const nav = [
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
 
-export function Layout({ page, setPage, connected, children }: {
-  page: Page; setPage: (page: Page) => void; connected: boolean; children: ReactNode;
+export function Layout({ page, setPage, connected, symbol, children }: {
+  page: Page; setPage: (page: Page) => void; connected: boolean; symbol: string; children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const current = nav.find(item => item.id === page);
@@ -52,7 +52,7 @@ export function Layout({ page, setPage, connected, children }: {
       <main>
         <header className="topbar">
           <button className="menu-button" onClick={() => setOpen(true)} aria-label="Open navigation"><Menu /></button>
-          <div><span>SPX</span><strong>Live market terminal</strong></div>
+          <div><span>{symbol}</span><strong>Live market terminal</strong></div>
           <div className="market-state"><Activity size={14} /><span>Market open</span><b>16:00 close</b></div>
           <button className="icon-button" aria-label="Notifications"><Bell size={18} /><i /></button>
           <div className="user-avatar">AS</div>
@@ -68,4 +68,3 @@ export function Layout({ page, setPage, connected, children }: {
     </div>
   );
 }
-
