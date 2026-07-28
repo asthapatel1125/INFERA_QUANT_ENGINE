@@ -1,0 +1,4 @@
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`skeleton ${className}`} aria-label="Loading live data" />;
+}
+
