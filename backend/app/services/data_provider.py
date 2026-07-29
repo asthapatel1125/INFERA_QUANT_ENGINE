@@ -21,6 +21,22 @@ GREEK_FIELDS = (
 )
 
 
+class _ThetaWildcardExpiration:
+    """Theta's SDK formats expirations with strftime, including its documented '*' value."""
+
+    def strftime(self, _format: str) -> str:
+        return "*"
+
+    def isoformat(self) -> str:
+        return "*"
+
+    def __str__(self) -> str:
+        return "*"
+
+
+THETA_ALL_EXPIRATIONS = _ThetaWildcardExpiration()
+
+
 def _number(value: Any, default: float = 0.0) -> float:
     try:
         result = float(value)
@@ -211,7 +227,7 @@ class VendorDataProvider:
         if self.open_interest and now - self.oi_updated < self.oi_ttl:
             return
         rows = _records(self._theta().option_snapshot_open_interest(
-            symbol=self.symbol, expiration="*", max_dte=self.max_dte,
+            symbol=self.symbol, expiration=THETA_ALL_EXPIRATIONS, max_dte=self.max_dte,
             strike_range=self.strike_range,
         ))
         self.open_interest = {
@@ -226,15 +242,15 @@ class VendorDataProvider:
             return
         client = self._theta()
         greeks = _records(client.option_snapshot_greeks_all(
-            symbol=self.symbol, expiration="*", max_dte=self.max_dte,
+            symbol=self.symbol, expiration=THETA_ALL_EXPIRATIONS, max_dte=self.max_dte,
             strike_range=self.strike_range, stock_price=spot,
         ))
         quotes = _records(client.option_snapshot_quote(
-            symbol=self.symbol, expiration="*", max_dte=self.max_dte,
+            symbol=self.symbol, expiration=THETA_ALL_EXPIRATIONS, max_dte=self.max_dte,
             strike_range=self.strike_range,
         ))
         trades = _records(client.option_snapshot_trade(
-            symbol=self.symbol, expiration="*", strike_range=self.strike_range,
+            symbol=self.symbol, expiration=THETA_ALL_EXPIRATIONS, strike_range=self.strike_range,
         ))
         self._refresh_open_interest()
         quote_map = {_contract_key(row): row for row in quotes}
