@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import threading
 import time
 from collections import deque
@@ -9,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.engines import AlertEngine, GreekEngine, MicrostructureEngine, SignalEngine, ZoneEngine
+
+logger = logging.getLogger(__name__)
 
 
 class StreamManager:
@@ -23,7 +26,10 @@ class StreamManager:
         self.alert_engine = AlertEngine()
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
+        self.ready_event = threading.Event()
         self.started = False
+        self.initializing = False
+        self.last_compute_error: str | None = None
         self.latest: dict = {}
         self.alerts: deque[dict] = deque(maxlen=100)
 
@@ -119,16 +125,44 @@ class StreamManager:
         }
 
     def start(self) -> None:
+        initialize = False
         with self.lock:
-            if self.started:
-                return
-            self.started = True
-            self._compute()
-            threading.Thread(target=self._run, name="market-stream", daemon=True).start()
+            if not self.started and not self.initializing:
+                self.initializing = True
+                initialize = True
+
+        if initialize:
+            try:
+                self._compute()
+            except Exception as exc:
+                logger.exception("Initial market snapshot failed")
+                with self.lock:
+                    self.last_compute_error = str(exc)
+                    self.initializing = False
+                raise
+            else:
+                with self.lock:
+                    self.started = True
+                    self.initializing = False
+                    self.last_compute_error = None
+                    self.ready_event.set()
+                threading.Thread(target=self._run, name="market-stream", daemon=True).start()
+        else:
+            # Concurrent SSE requests arrive together. Wait for the request performing
+            # the initial vendor refresh instead of returning an empty packet.
+            self.ready_event.wait(timeout=90)
 
     def _run(self) -> None:
         while not self.stop_event.wait(self.interval):
-            self._compute()
+            try:
+                self._compute()
+                with self.lock:
+                    self.last_compute_error = None
+                    self.ready_event.set()
+            except Exception as exc:
+                logger.exception("Market stream refresh failed")
+                with self.lock:
+                    self.last_compute_error = str(exc)
 
     def _compute(self) -> None:
         raw = self.provider.snapshot()
@@ -217,8 +251,19 @@ class StreamManager:
 
     def get(self, channel: str) -> dict:
         self.start()
+        self.ready_event.wait(timeout=90)
         with self.lock:
             return copy.deepcopy(self.latest.get(channel, {}))
+
+    def diagnostics(self) -> dict:
+        with self.lock:
+            return {
+                "ready": self.ready_event.is_set(),
+                "started": self.started,
+                "initializing": self.initializing,
+                "last_compute_error": self.last_compute_error,
+                "channels": sorted(self.latest),
+            }
 
     def get_alerts(self) -> list[dict]:
         self.start()
@@ -229,7 +274,12 @@ class StreamManager:
         self.start()
         previous = ""
         while True:
-            payload = json.dumps(self.get(channel), separators=(",", ":"))
+            packet = self.get(channel)
+            if not packet:
+                yield "retry: 3000\n: waiting-for-first-snapshot\n\n"
+                time.sleep(1)
+                continue
+            payload = json.dumps(packet, separators=(",", ":"))
             if payload != previous:
                 yield f"event: {channel}\ndata: {payload}\n\n"
                 previous = payload
