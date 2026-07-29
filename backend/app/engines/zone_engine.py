@@ -12,6 +12,7 @@ class ZoneEngine:
         self.candidate_count = 0
         self.stability = 0.0
         self.history: deque[dict[str, Any]] = deque(maxlen=120)
+        self.last_change_event: dict[str, Any] | None = None
 
     @staticmethod
     def classify(data: dict[str, float]) -> str:
@@ -33,6 +34,7 @@ class ZoneEngine:
         return "COMPRESSION" if volatility < 0.42 else "TREND"
 
     def compute(self, data: dict[str, float], timestamp: str) -> dict[str, Any]:
+        previous_zone = self.current_zone
         proposed = self.classify(data)
         if proposed == self.candidate:
             self.candidate_count += 1
@@ -60,7 +62,18 @@ class ZoneEngine:
             "stability": round(self.stability, 3),
             "transition_flag": transitional or changed,
             "candidate_samples": self.candidate_count,
+            "zone_changed": changed,
         }
+        if changed:
+            self.last_change_event = {
+                "timestamp": timestamp,
+                "from_zone": previous_zone,
+                "to_zone": self.current_zone,
+                "greeks": data.get("greeks", {}),
+                "volatility": data.get("volatility_context", {}),
+                "microstructure": data.get("microstructure_context", {}),
+                "time": data.get("time_context", {}),
+            }
+        snapshot["change_event"] = self.last_change_event
         self.history.append(snapshot)
         return snapshot
-

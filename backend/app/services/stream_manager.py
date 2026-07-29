@@ -5,7 +5,8 @@ import json
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.engines import AlertEngine, GreekEngine, MicrostructureEngine, SignalEngine, ZoneEngine
 
@@ -26,6 +27,97 @@ class StreamManager:
         self.latest: dict = {}
         self.alerts: deque[dict] = deque(maxlen=100)
 
+    @staticmethod
+    def _time_context(now: datetime) -> dict:
+        try:
+            eastern_zone = ZoneInfo("America/New_York")
+        except ZoneInfoNotFoundError:
+            # Minimal environments can lack the IANA database; production installs tzdata.
+            eastern_zone = timezone(timedelta(hours=-5), "ET")
+        eastern = now.astimezone(eastern_zone)
+        minute = eastern.hour * 60 + eastern.minute
+        if minute < 570:
+            phase, bias, expected = "OPEN", "DISCOVERY", "Opening auction; expect wider spreads and rapid repricing."
+        elif minute < 660:
+            phase, bias, expected = "MORNING", "MOMENTUM", "Directional follow-through is more likely while liquidity builds."
+        elif minute < 810:
+            phase, bias, expected = "MIDDAY", "MEAN_REVERSION", "Lower participation favors compression and failed breakouts."
+        elif minute < 930:
+            phase, bias, expected = "AFTERNOON", "REPOSITIONING", "Dealer hedging and institutional repositioning can strengthen trends."
+        else:
+            phase, bias, expected = "CLOSE", "ACCELERATION", "Closing flows can amplify imbalance and volatility."
+        return {
+            "current_hour": eastern.strftime("%H:%M:%S ET"),
+            "session_phase": phase,
+            "session_bias": bias,
+            "expected_behavior": expected,
+        }
+
+    @staticmethod
+    def _factor_context(raw: dict, exposures: dict, micro: dict, time_context: dict) -> dict:
+        greek = exposures["regime_details"]
+        gamma_force = min(1.0, abs(greek["gamma_slope"]) * 50)
+        drift_force = min(1.0, (abs(greek["vanna_drift"]) + abs(greek["charm_drift"])) * 4)
+        greek_score = round((gamma_force + drift_force + exposures["greek_stability"]) / 3, 3)
+        greek_regime = (
+            "DIRECTIONAL" if gamma_force > .55
+            else "UNSTABLE" if exposures["greek_stability"] < .45
+            else "BALANCED"
+        )
+        vol_expansion = round(float(raw["volatility"]), 3)
+        vol_compression = round(float(raw["compression"]), 3)
+        volatility_regime = (
+            "EXPANDING" if vol_expansion > .65
+            else "COMPRESSED" if vol_compression > .65
+            else "NORMAL"
+        )
+        micro_regime = (
+            "STABLE" if micro["micro_stability"] >= .65
+            else "FRAGILE" if micro["micro_stability"] < .4
+            else "MIXED"
+        )
+        time_weights = {"OPEN": .78, "MORNING": .72, "MIDDAY": .45, "AFTERNOON": .68, "CLOSE": .82}
+        combined = round(
+            .35 * greek_score
+            + .25 * max(vol_expansion, vol_compression)
+            + .25 * micro["micro_stability"]
+            + .15 * time_weights[time_context["session_phase"]],
+            3,
+        )
+        term_slope = round(float(micro.get("iv_slope", 0)), 4)
+        volatility_context = {
+            "iv_expansion": vol_expansion,
+            "iv_compression": vol_compression,
+            "vol_of_vol": micro["vol_of_vol"],
+            "term_structure_slope": term_slope,
+            "regime": volatility_regime,
+        }
+        micro_context = {
+            "quote_imbalance": micro["quote_imbalance"],
+            "microprice_direction": (
+                "UP" if micro["microprice"] > micro["midprice"]
+                else "DOWN" if micro["microprice"] < micro["midprice"]
+                else "FLAT"
+            ),
+            "sweep_detected": micro["sweep_detected"],
+            "spread_regime": micro["spread_regime"],
+            "liquidity_score": micro["liquidity_score"],
+            "microstructure_stability": micro["micro_stability"],
+            "regime": micro_regime,
+        }
+        return {
+            "greek_regime": greek_regime,
+            "greek_score": greek_score,
+            "time_regime": time_context["session_bias"],
+            "volatility_regime": volatility_regime,
+            "microstructure_regime": micro_regime,
+            "combined_zone_score": combined,
+            "greeks": greek,
+            "volatility_context": volatility_context,
+            "microstructure_context": micro_context,
+            "time_context": time_context,
+        }
+
     def start(self) -> None:
         with self.lock:
             if self.started:
@@ -40,19 +132,40 @@ class StreamManager:
 
     def _compute(self) -> None:
         raw = self.provider.snapshot()
-        timestamp = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
+        timestamp = now.isoformat()
         micro = self.micro_engine.compute(raw)
+        exposures = self.greek_engine.compute(self.provider.option_chain(raw["spot"]), raw["spot"])
+        time_context = self._time_context(now)
+        factors = self._factor_context(raw, exposures, micro, time_context)
         zone_input = {
             **raw,
             "liquidity": micro["liquidity_score"],
             "micro_stability": micro["micro_stability"],
+            **factors,
         }
         zone = self.zone_engine.compute(zone_input, timestamp)
-        exposures = self.greek_engine.compute(self.provider.option_chain(raw["spot"]), raw["spot"])
         zone.update({
             "symbol": raw.get("symbol", ""),
             "spot": raw["spot"],
             "data_source": raw.get("data_source", "unknown"),
+            "determination": {
+                "greek_regime": factors["greek_regime"],
+                "time_regime": factors["time_regime"],
+                "volatility_regime": factors["volatility_regime"],
+                "microstructure_stability": micro["micro_stability"],
+                "combined_zone_score": factors["combined_zone_score"],
+            },
+            "greeks": factors["greeks"],
+            "time_context": time_context,
+            "volatility_context": factors["volatility_context"],
+            "microstructure_context": factors["microstructure_context"],
+            "why": [
+                f"Greek regime is {factors['greek_regime'].lower()} with a {factors['greek_score']:.2f} factor score.",
+                f"Volatility is {factors['volatility_regime'].lower()} and term slope is {factors['volatility_context']['term_structure_slope']:+.4f}.",
+                f"Microstructure is {factors['microstructure_regime'].lower()} with {micro['micro_stability']:.2f} stability.",
+                f"{time_context['session_phase'].title()} session bias is {time_context['session_bias'].lower()}.",
+            ],
         })
         exposures.update({
             "symbol": raw.get("symbol", ""),

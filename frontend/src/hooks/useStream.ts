@@ -12,7 +12,7 @@ export function useStream<T>(channel: StreamChannel) {
     source.addEventListener(channel, (event) => {
       const packet = JSON.parse((event as MessageEvent).data) as T;
       setData(packet);
-      setHistory((items) => [...items.slice(-39), packet]);
+      setHistory((items) => [...items.slice(-199), packet]);
       setConnected(true);
     });
     source.onerror = () => setConnected(false);
@@ -21,4 +21,3 @@ export function useStream<T>(channel: StreamChannel) {
 
   return { data, history, connected };
 }
-

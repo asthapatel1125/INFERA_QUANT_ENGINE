@@ -8,6 +8,54 @@ export interface Zone {
   symbol: string;
   spot: number;
   data_source: string;
+  zone_changed: boolean;
+  why: string[];
+  determination: {
+    greek_regime: string;
+    time_regime: string;
+    volatility_regime: string;
+    microstructure_stability: number;
+    combined_zone_score: number;
+  };
+  greeks: {
+    gamma_slope: number;
+    vanna_drift: number;
+    charm_drift: number;
+    speed_stability: number;
+    zomma_stability: number;
+    color_stability: number;
+  };
+  time_context: {
+    current_hour: string;
+    session_phase: string;
+    session_bias: string;
+    expected_behavior: string;
+  };
+  volatility_context: {
+    iv_expansion: number;
+    iv_compression: number;
+    vol_of_vol: number;
+    term_structure_slope: number;
+    regime: string;
+  };
+  microstructure_context: {
+    quote_imbalance: number;
+    microprice_direction: string;
+    sweep_detected: boolean;
+    spread_regime: string;
+    liquidity_score: number;
+    microstructure_stability: number;
+    regime: string;
+  };
+  change_event: null | {
+    timestamp: string;
+    from_zone: string;
+    to_zone: string;
+    greeks: Zone["greeks"];
+    volatility: Zone["volatility_context"];
+    microstructure: Zone["microstructure_context"];
+    time: Zone["time_context"];
+  };
 }
 
 export interface CurvePoint {
