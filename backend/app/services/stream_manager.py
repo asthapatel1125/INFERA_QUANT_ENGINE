@@ -61,7 +61,14 @@ class StreamManager:
 
     @staticmethod
     def _factor_context(raw: dict, exposures: dict, micro: dict, time_context: dict) -> dict:
-        greek = exposures["regime_details"]
+        greek = exposures.get("regime_details") or {
+            "gamma_slope": 0.0,
+            "vanna_drift": 0.0,
+            "charm_drift": 0.0,
+            "speed_stability": exposures.get("greek_stability", 0.0),
+            "zomma_stability": exposures.get("greek_stability", 0.0),
+            "color_stability": exposures.get("greek_stability", 0.0),
+        }
         gamma_force = min(1.0, abs(greek["gamma_slope"]) * 50)
         drift_force = min(1.0, (abs(greek["vanna_drift"]) + abs(greek["charm_drift"])) * 4)
         greek_score = round((gamma_force + drift_force + exposures["greek_stability"]) / 3, 3)

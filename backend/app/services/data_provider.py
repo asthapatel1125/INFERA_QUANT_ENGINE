@@ -21,22 +21,6 @@ GREEK_FIELDS = (
 )
 
 
-class _ThetaWildcardExpiration:
-    """Theta's SDK formats expirations with strftime, including its documented '*' value."""
-
-    def strftime(self, _format: str) -> str:
-        return "*"
-
-    def isoformat(self) -> str:
-        return "*"
-
-    def __str__(self) -> str:
-        return "*"
-
-
-THETA_ALL_EXPIRATIONS = _ThetaWildcardExpiration()
-
-
 def _number(value: Any, default: float = 0.0) -> float:
     try:
         result = float(value)
@@ -173,6 +157,8 @@ class VendorDataProvider:
         self.open_interest: dict[tuple[str, float, str], int] = {}
         self.oi_updated = 0.0
         self.market_micro: dict[str, Any] = {}
+        self.expirations: list[date] = []
+        self.expirations_updated = 0.0
         self.last_error: str | None = None
         self.vendor_healthy = False
 
@@ -222,14 +208,37 @@ class VendorDataProvider:
         self.price_history.append(price)
         return price
 
-    def _refresh_open_interest(self) -> None:
+    def _active_expirations(self) -> list[date]:
+        now = time.monotonic()
+        if self.expirations and now - self.expirations_updated < 3600:
+            return self.expirations
+        rows = _records(self._theta().option_list_expirations(symbol=self.symbol))
+        today = date.today()
+        expirations: list[date] = []
+        for row in rows:
+            value = row.get("expiration")
+            if isinstance(value, str):
+                value = date.fromisoformat(value[:10])
+            if isinstance(value, date) and 0 <= (value - today).days <= self.max_dte:
+                expirations.append(value)
+        self.expirations = sorted(set(expirations))
+        self.expirations_updated = now
+        if not self.expirations:
+            raise RuntimeError(
+                f"ThetaData returned no {self.symbol} expirations within {self.max_dte} DTE"
+            )
+        return self.expirations
+
+    def _refresh_open_interest(self, expirations: list[date]) -> None:
         now = time.monotonic()
         if self.open_interest and now - self.oi_updated < self.oi_ttl:
             return
-        rows = _records(self._theta().option_snapshot_open_interest(
-            symbol=self.symbol, expiration=THETA_ALL_EXPIRATIONS, max_dte=self.max_dte,
-            strike_range=self.strike_range,
-        ))
+        rows: list[dict[str, Any]] = []
+        for expiration in expirations:
+            rows.extend(_records(self._theta().option_snapshot_open_interest(
+                symbol=self.symbol, expiration=expiration,
+                strike_range=self.strike_range,
+            )))
         self.open_interest = {
             _contract_key(row): int(_number(row.get("open_interest")))
             for row in rows
@@ -241,18 +250,24 @@ class VendorDataProvider:
         if self.chain and now - self.chain_updated < self.chain_ttl:
             return
         client = self._theta()
-        greeks = _records(client.option_snapshot_greeks_all(
-            symbol=self.symbol, expiration=THETA_ALL_EXPIRATIONS, max_dte=self.max_dte,
-            strike_range=self.strike_range, stock_price=spot,
-        ))
-        quotes = _records(client.option_snapshot_quote(
-            symbol=self.symbol, expiration=THETA_ALL_EXPIRATIONS, max_dte=self.max_dte,
-            strike_range=self.strike_range,
-        ))
-        trades = _records(client.option_snapshot_trade(
-            symbol=self.symbol, expiration=THETA_ALL_EXPIRATIONS, strike_range=self.strike_range,
-        ))
-        self._refresh_open_interest()
+        expirations = self._active_expirations()
+        greeks: list[dict[str, Any]] = []
+        quotes: list[dict[str, Any]] = []
+        trades: list[dict[str, Any]] = []
+        for expiration in expirations:
+            greeks.extend(_records(client.option_snapshot_greeks_all(
+                symbol=self.symbol, expiration=expiration,
+                strike_range=self.strike_range, stock_price=spot,
+            )))
+            quotes.extend(_records(client.option_snapshot_quote(
+                symbol=self.symbol, expiration=expiration,
+                strike_range=self.strike_range,
+            )))
+            trades.extend(_records(client.option_snapshot_trade(
+                symbol=self.symbol, expiration=expiration,
+                strike_range=self.strike_range,
+            )))
+        self._refresh_open_interest(expirations)
         quote_map = {_contract_key(row): row for row in quotes}
         trade_map = {_contract_key(row): row for row in trades}
         chain: list[dict[str, Any]] = []

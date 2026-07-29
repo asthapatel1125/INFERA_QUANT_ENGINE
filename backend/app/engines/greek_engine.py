@@ -13,6 +13,9 @@ EXPOSURE_MAP = {"gamma": "gex", "delta": "dex", "vega": "vex", "theta": "tex", "
 
 
 class GreekEngine:
+    def __init__(self) -> None:
+        self.previous_averages: dict[str, float] = {}
+
     def compute(self, chain: list[dict[str, Any]], spot: float) -> dict[str, Any]:
         normalized = normalize_greeks(chain, GREEKS)
         curves: dict[float, dict[str, float]] = defaultdict(lambda: {value: 0.0 for value in EXPOSURE_MAP.values()})
@@ -40,6 +43,25 @@ class GreekEngine:
             name: sum(abs(row["normalized"][name]) for row in normalized) / max(len(normalized), 1)
             for name in GREEKS
         }
+        signed_averages = {
+            name: sum(row["normalized"][name] for row in normalized) / max(len(normalized), 1)
+            for name in GREEKS
+        }
+        below_gamma = [float(row["gamma"]) for row in chain if float(row["strike"]) < spot]
+        above_gamma = [float(row["gamma"]) for row in chain if float(row["strike"]) >= spot]
+        gamma_slope = (
+            sum(above_gamma) / max(len(above_gamma), 1)
+            - sum(below_gamma) / max(len(below_gamma), 1)
+        )
+        drifts = {
+            name: signed_averages[name] - self.previous_averages.get(name, signed_averages[name])
+            for name in ("vanna", "charm")
+        }
+        stability_details = {
+            name: clamp(1 - pstdev([row["normalized"][name] for row in normalized]))
+            for name in ("speed", "zomma", "color")
+        }
+        self.previous_averages = signed_averages
         instability = sum(pstdev([row["normalized"][name] for row in normalized]) for name in ["speed", "zomma", "color"]) / 3
         curve_list = [{"strike": strike, **{key: round(value, 2) for key, value in values.items()}} for strike, values in ordered]
         return {
@@ -56,5 +78,12 @@ class GreekEngine:
             "direction_sign": 1 if totals["dex"] >= 0 else -1,
             "band_scores": {name: round(band_score(value), 3) for name, value in averages.items()},
             "bands": {name: strength_band(value) for name, value in averages.items()},
+            "regime_details": {
+                "gamma_slope": round(gamma_slope, 5),
+                "vanna_drift": round(drifts["vanna"], 5),
+                "charm_drift": round(drifts["charm"], 5),
+                "speed_stability": round(stability_details["speed"], 3),
+                "zomma_stability": round(stability_details["zomma"], 3),
+                "color_stability": round(stability_details["color"], 3),
+            },
         }
-
