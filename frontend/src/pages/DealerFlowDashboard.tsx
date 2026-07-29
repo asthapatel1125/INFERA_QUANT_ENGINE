@@ -75,6 +75,8 @@ export function DealerFlowDashboard({ data }: { data: Exposure | null }) {
   const sampled = data.curve.filter((_, i) => i % 3 === 0);
   const labels = sampled.map(point => String(point.strike));
   const strikeLabels = data.curve.map(point => `Strike ${point.strike}`);
+  const visibleStrikeTicks = data.curve.length ? [0, .25, .5, .75, 1].map(ratio =>
+    String(data.curve[Math.round((data.curve.length - 1) * ratio)].strike)) : [];
   const maxGex = Math.max(...sampled.map(point => Math.abs(point.gex)), 1);
   const lineDomain = (sets: number[][]): [number, number] => {
     const values = sets.flat();
@@ -134,7 +136,7 @@ export function DealerFlowDashboard({ data }: { data: Exposure | null }) {
             <div className="dealer-line-inner dealer-plot-inner">
               <LineChart values={data.curve.map(point => point.dex)} color="#60a5fa" fill interactive
                 pointLabels={strikeLabels} domain={dexDomain} seriesName="DEX"
-                valueFormatter={coordinateMoney} />
+                labels={visibleStrikeTicks} valueFormatter={coordinateMoney} />
             </div>
           </ChartFrame>
           <ReasonBox>{data.totals.dex < 0
@@ -150,7 +152,7 @@ export function DealerFlowDashboard({ data }: { data: Exposure | null }) {
             timestamp={data.timestamp}>
             <div className="dealer-line-inner dealer-plot-inner">
               <LineChart values={data.curve.map(point => point.vex)} color="#d98cff" interactive
-                pointLabels={strikeLabels} domain={volDomain} seriesName="Vega" valueFormatter={coordinateMoney}
+                pointLabels={strikeLabels} labels={visibleStrikeTicks} domain={volDomain} seriesName="Vega" valueFormatter={coordinateMoney}
                 extraSeries={[
                   { name: "Theta", values: data.curve.map(point => point.tex), color: "#ffb454" },
                   { name: "Rho", values: data.curve.map(point => point.rex), color: "#60a5fa" }
@@ -162,10 +164,10 @@ export function DealerFlowDashboard({ data }: { data: Exposure | null }) {
         </Card>
 
         <Card title="Greek strength matrix" eyebrow={`Stability ${Math.round(data.greek_stability * 100)}%`} className="wide-card dealer-matrix-card">
-          <p className="matrix-guide">Ideal reference: <b>STRONG</b> or <b>STRONGEST</b> with stability at or above 70%. “Ideal” is contextual—weak readings can still be informative when they agree with the active zone.</p>
+          <p className="matrix-guide">Numeric target: normalized Greek strength <b>0.80–1.00</b> and overall stability <b>≥ 0.70</b>. The engine classifies 0.80–1.00 as STRONGEST and 0.60–0.79 as STRONG.</p>
           <div className="greek-matrix">{Object.entries(data.bands).map(([name, band]) => <div key={name}>
             <span>{name}</span><b className={`band-${band.toLowerCase()}`}>{band}</b>
-            <small>Ideal: Strong + stable</small>
+            <small><b>Ideal strength: 0.80–1.00</b><br />Ideal stability: ≥ 0.70</small>
           </div>)}</div>
         </Card>
       </div>
