@@ -56,7 +56,7 @@ button[title]{cursor:pointer}
 .dealer-totals em{font-size:12px}
 .dealer-totals small{grid-column:1/-1;display:block;color:#9aabb2;font-size:11px;line-height:1.45;margin-top:8px}
 .dealer-totals p{grid-column:1/-1;color:#71858e;font-size:11px;line-height:1.5;margin:4px 0 0}
-.dealer-graph-card{min-height:480px;overflow:visible}
+.dealer-graph-card{min-height:560px;overflow:visible}
 .graph-actions{display:flex;align-items:center;gap:8px}
 .graph-expand{display:flex;align-items:center;gap:6px;border:1px solid #314047;border-radius:5px;background:#121b1f;color:#d3dedb;padding:7px 9px;font-size:11px}
 .graph-expand svg{width:15px;height:15px}
@@ -123,6 +123,7 @@ button[title]{cursor:pointer}
 .jump-live.is-live{color:var(--green);border-color:#294a31}.jump-live.is-live i{background:var(--green);box-shadow:0 0 8px var(--green)}
 .dealer-chart-frame .gex-chart-inner{min-width:900px}
 .dealer-chart-frame .dealer-line-inner{min-width:900px}
+.dealer-chart-frame .axis-labels{font-size:10px;color:#91a5ad;margin-top:5px;padding:0 3px}
 .dealer-expanded .fixed-y-axis{height:440px}
 .dealer-expanded .dealer-chart-frame{grid-template-columns:145px minmax(0,1fr)}
 @media(max-width:700px){
@@ -151,6 +152,11 @@ button[title]{cursor:pointer}
 .vol-micro-page .bar-column small{font-size:11px}
 .vol-micro-page .quality-list b{font-size:14px}.vol-micro-page .quality-list small{font-size:11px}.vol-micro-page .quality-list strong{font-size:14px}
 .vol-micro-page .big-stat{font-size:45px}.vol-micro-page .big-stat small{font-size:14px}
+.micro-chart-scroll,.surface-scroll{overflow-x:auto;overflow-y:hidden;padding:4px 8px 15px;scrollbar-color:#5e7179 #0c1316;scrollbar-width:thin}
+.micro-chart-inner{min-width:900px;padding-left:8px}
+.micro-chart-scroll .axis-labels{font-size:10px;color:#91a5ad;margin-top:5px}
+.surface-scroll .surface-axis{min-width:1050px}
+.micro-chart-scroll:after,.surface-scroll:after{content:"Scroll horizontally for earlier values";position:sticky;left:0;display:block;width:max-content;margin:8px auto 0;color:#7f949d;font:600 10px "DM Mono"}
 .signal-page .gauge-grid .card{min-height:340px}
 .signal-page .gauge svg{width:220px;height:145px}
 .signal-page .gauge strong{font-size:40px;margin-top:-55px}.signal-page .gauge span{font-size:13px}

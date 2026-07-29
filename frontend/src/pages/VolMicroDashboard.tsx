@@ -14,10 +14,13 @@ const domain = (values: number[], floor?: number, ceiling?: number): [number, nu
 };
 const Reason = ({ children }: { children: React.ReactNode }) =>
   <div className="micro-reason"><b>Live interpretation</b><span>{children}</span></div>;
+const ScrollPlot = ({ children }: { children: React.ReactNode }) =>
+  <div className="micro-chart-scroll"><div className="micro-chart-inner">{children}</div></div>;
 
 export function VolMicroDashboard({ data, history }: { data: Microstructure | null; history: Microstructure[] }) {
   if (!data) return <Skeleton className="hero-skeleton" />;
   const labels = times(history);
+  const axisTimes = labels.length ? [0, .25, .5, .75, 1].map(ratio => labels[Math.round((labels.length - 1) * ratio)]) : [];
   const imbalance = history.map(x => x.quote_imbalance);
   const microprices = history.map(x => x.microprice);
   const tape = history.map(x => x.tape_speed);
@@ -31,18 +34,18 @@ export function VolMicroDashboard({ data, history }: { data: Microstructure | nu
       </div>
       <div className="dashboard-grid">
         <Card title="Quote imbalance" eyebrow="NBBO pressure" action={<Radio size={20} className="green" />}>
-          <LineChart values={imbalance} color={data.quote_imbalance >= 0 ? "#94ff70" : "#ff685f"} fill interactive
-            pointLabels={labels} domain={[-1, 1]} seriesName="Imbalance" xAxisLabel="X · Stream time" yAxisLabel="Y · Imbalance (−1 to +1)" />
+          <ScrollPlot><LineChart values={imbalance} color={data.quote_imbalance >= 0 ? "#94ff70" : "#ff685f"} fill interactive
+            pointLabels={labels} labels={axisTimes} domain={[-1, 1]} seriesName="Imbalance" xAxisLabel="X · Stream time" yAxisLabel="Y · Imbalance (−1 to +1)" /></ScrollPlot>
           <Reason>{data.quote_imbalance < -.10 ? "Ask-side size dominates; downside pressure is confirmed while the reading remains below −0.10." : data.quote_imbalance > .10 ? "Bid-side size dominates; upside pressure is confirmed while above +0.10." : "The book is inside its balanced range."}</Reason>
         </Card>
         <Card title="Microprice" eyebrow="Fair-value pressure">
-          <LineChart values={microprices} color="#60a5fa" fill interactive pointLabels={labels}
+          <ScrollPlot><LineChart values={microprices} color="#60a5fa" fill interactive pointLabels={labels} labels={axisTimes}
             domain={domain(microprices)} seriesName="QQQ" valueFormatter={value => value.toFixed(2)}
-            xAxisLabel="X · Stream time" yAxisLabel="Y · QQQ price" />
+            xAxisLabel="X · Stream time" yAxisLabel="Y · QQQ price" /></ScrollPlot>
           <Reason>Microprice is {Math.abs(data.microprice - data.midprice).toFixed(3)} points from midpoint; values above midpoint favor buyers and values below favor sellers.</Reason>
         </Card>
         <Card title="Volatility surface" eyebrow="Term structure" className="wide-card">
-          <div className="surface-axis"><span>Y · Implied volatility</span><BarChart values={data.term_structure.map(x => x.iv)} labels={data.term_structure.map(x => x.expiry)} positive="#d98cff" interactive /><b>X · Expiration date</b></div>
+          <div className="surface-scroll"><div className="surface-axis"><span>Y · Implied volatility</span><BarChart values={data.term_structure.map(x => x.iv)} labels={data.term_structure.map(x => x.expiry)} positive="#d98cff" interactive /><b>X · Expiration date</b></div></div>
           <Reason>Ideal structure is smooth and gradually rising. Current front-to-back slope is {data.iv_slope >= 0 ? "positive" : "negative"} ({data.iv_slope.toFixed(4)}); abrupt peaks indicate event or liquidity concentration.</Reason>
         </Card>
         <Card title="Market quality" eyebrow="Live diagnostics">
@@ -55,8 +58,8 @@ export function VolMicroDashboard({ data, history }: { data: Microstructure | nu
         </Card>
         <Card title="Tape speed" eyebrow="Trades per minute">
           <div className="big-stat">{data.tape_speed.toFixed(1)}<small> TPM</small></div>
-          <LineChart values={tape} color="#ffb454" interactive pointLabels={labels} domain={domain(tape, 0)}
-            seriesName="Tape speed" xAxisLabel="X · Stream time" yAxisLabel="Y · Trades per minute" />
+          <ScrollPlot><LineChart values={tape} color="#ffb454" interactive pointLabels={labels} labels={axisTimes} domain={domain(tape, 0)}
+            seriesName="Tape speed" xAxisLabel="X · Stream time" yAxisLabel="Y · Trades per minute" /></ScrollPlot>
           <Reason>Reference: below 30 TPM is slow, 30–60 is normal, and above 60 is fast. Current activity is {data.tape_speed > 60 ? "fast" : data.tape_speed < 30 ? "slow" : "normal"}.</Reason>
         </Card>
       </div>
