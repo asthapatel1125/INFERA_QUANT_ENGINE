@@ -79,6 +79,7 @@ export interface Exposure {
   long_gamma_zones: number[];
   short_gamma_zones: number[];
   greek_stability: number;
+  band_scores: Record<string, number>;
   bands: Record<string, string>;
   symbol: string;
   data_source: string;

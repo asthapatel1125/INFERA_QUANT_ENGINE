@@ -8,16 +8,17 @@ export function SignalDashboard({ scores, zone, alert }: { scores: SignalScores 
   if (!scores || !zone) return <Skeleton className="hero-skeleton" />;
   const direction = scores.direction_score >= 0 ? "LONG" : "SHORT";
   return (
-    <>
+    <div className="signal-page">
       <div className="gauge-grid">
-        <Card><Gauge value={scores.direction_score} label="Direction score" signed color={scores.direction_score >= 0 ? "#94ff70" : "#ff685f"} /></Card>
-        <Card><Gauge value={scores.explosion_score} label="Explosion score" color="#ffb454" /></Card>
-        <Card><Gauge value={scores.precision_score} label="Precision score" color="#60a5fa" /></Card>
+        <Card><Gauge value={scores.direction_score} label="Direction score" signed color={scores.direction_score >= 0 ? "#94ff70" : "#ff685f"} /><div className="signal-benchmark"><b>Alert ideal: |score| ≥ 0.40</b><span>{Math.abs(scores.direction_score) >= .4 ? "Directional conviction passes." : "Direction is not strong enough yet."}</span></div></Card>
+        <Card><Gauge value={scores.explosion_score} label="Explosion score" color="#ffb454" /><div className="signal-benchmark"><b>Expansion ideal: ≥ 0.60</b><span>{scores.explosion_score >= .6 ? "Movement potential is elevated." : "Movement potential is moderate."}</span></div></Card>
+        <Card><Gauge value={scores.precision_score} label="Precision score" color="#60a5fa" /><div className="signal-benchmark"><b>Alert ideal: ≥ 0.60</b><span>{scores.precision_score >= .6 ? "Precision threshold passes." : `${(.6 - scores.precision_score).toFixed(2)} below threshold.`}</span></div></Card>
       </div>
       <div className="dashboard-grid signal-grid">
         <Card className="signal-callout">
           <div className="signal-icon"><Crosshair /></div><span className="eyebrow">Composite signal</span>
           <h2>{direction} BIAS</h2><p>{scores.precision_score >= .6 ? "The engine sees aligned dealer positioning and market quality." : "Conditions are forming, but precision remains below the alert threshold."}</p>
+          <p className="signal-detail">Direction {scores.direction_score.toFixed(2)} establishes the side, explosion {scores.explosion_score.toFixed(2)} estimates move potential, and precision {scores.precision_score.toFixed(2)} measures agreement. A validated alert still requires zone stability and matching quote pressure.</p>
           <div className="confidence"><span>Composite confidence</span><b>{Math.round(scores.precision_score * 100)}%</b><div><i style={{ width: `${scores.precision_score * 100}%` }} /></div></div>
         </Card>
         <Card title="Signal context" eyebrow="Validation stack">
@@ -28,7 +29,6 @@ export function SignalDashboard({ scores, zone, alert }: { scores: SignalScores 
           </div>
         </Card>
       </div>
-    </>
+    </div>
   );
 }
-

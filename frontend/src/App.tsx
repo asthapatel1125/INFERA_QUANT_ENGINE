@@ -38,7 +38,9 @@ export default function App() {
       {page === "dealer" && <DealerFlowDashboard data={exposures.data} />}
       {page === "micro" && <VolMicroDashboard data={micro.data} history={micro.history} />}
       {page === "signals" && <SignalDashboard scores={scores.data} zone={zones.data} alert={alert.data} />}
-      {page === "alerts" && <AlertsDashboard alerts={alerts} live={alert.data} />}
+      <div style={{ display: page === "alerts" ? "contents" : "none" }}>
+        <AlertsDashboard alerts={alerts} live={alert.data} spot={zones.data?.spot ?? null} exposure={exposures.data} />
+      </div>
       {page === "settings" && <Settings />}
     </Layout>
   );

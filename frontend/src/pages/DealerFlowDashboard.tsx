@@ -1,5 +1,5 @@
 import { Maximize2, Minimize2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Card } from "../components/Card";
 import { BarChart, LineChart } from "../components/Charts";
 import { Skeleton } from "../components/Skeleton";
@@ -26,6 +26,46 @@ const totalReason = (key: keyof typeof benchmarks, value: number) => {
 
 function ReasonBox({ children }: { children: ReactNode }) {
   return <div className="dealer-reason"><b>Current interpretation</b><span>{children}</span></div>;
+}
+
+function ScrollablePlot({ children, timestamp }: { children: ReactNode; timestamp: string }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [followingLive, setFollowingLive] = useState(true);
+  const jumpToLive = () => {
+    const element = scroller.current;
+    if (!element) return;
+    element.scrollTo({ left: element.scrollWidth, behavior: "smooth" });
+    setFollowingLive(true);
+  };
+  useEffect(() => {
+    if (followingLive && scroller.current) scroller.current.scrollLeft = scroller.current.scrollWidth;
+  }, [timestamp, followingLive]);
+  return <>
+    <div ref={scroller} className="dealer-chart-scroll"
+      onScroll={event => {
+        const element = event.currentTarget;
+        setFollowingLive(element.scrollWidth - element.clientWidth - element.scrollLeft < 24);
+      }}>
+      {children}
+    </div>
+    <button className={`jump-live ${followingLive ? "is-live" : ""}`} onClick={jumpToLive}
+      title={followingLive ? "Showing the newest live values" : "Jump to the newest live values"}>
+      <i />{followingLive ? "LIVE" : "Jump to live"}
+    </button>
+  </>;
+}
+
+function ChartFrame({ yLabel, xLabel, ticks, timestamp, children }: {
+  yLabel: string; xLabel: string; ticks: string[]; timestamp: string; children: ReactNode;
+}) {
+  return <div className="dealer-chart-frame">
+    <div className="fixed-y-axis" aria-hidden="true">
+      <strong>{yLabel}</strong>
+      <div>{ticks.map(tick => <span key={tick}>{tick}</span>)}</div>
+    </div>
+    <ScrollablePlot timestamp={timestamp}>{children}</ScrollablePlot>
+    <span className="fixed-x-axis">{xLabel}</span>
+  </div>;
 }
 
 export function DealerFlowDashboard({ data }: { data: Exposure | null }) {
@@ -74,14 +114,12 @@ export function DealerFlowDashboard({ data }: { data: Exposure | null }) {
         <Card title="Gamma exposure profile" eyebrow="By strike · all expiries"
           className={`wide-card dealer-graph-card ${graphClass("gex")}`}
           action={<div className="graph-actions"><span className="pill">Spot {data.spot.toFixed(2)}</span>{expandButton("gex", "Gamma exposure profile")}</div>}>
-          <div className="dealer-chart-scroll" title="Scroll horizontally to inspect earlier strikes">
-            <div className="gex-chart-inner">
-              <span className="dealer-y-label">Y · Gamma exposure ($ millions)</span>
-              <div className="gex-scale"><span>{coordinateMoney(maxGex)}</span><span>$0</span><span>−{coordinateMoney(maxGex)}</span></div>
+          <ChartFrame yLabel="Y · Gamma exposure ($ millions)" xLabel="X · Option strike"
+            ticks={[coordinateMoney(maxGex), "$0", `−${coordinateMoney(maxGex)}`]} timestamp={data.timestamp}>
+            <div className="gex-chart-inner dealer-plot-inner">
               <BarChart values={sampled.map(point => point.gex)} labels={labels} interactive />
-              <span className="dealer-x-label">X · Option strike</span>
             </div>
-          </div>
+          </ChartFrame>
           <div className="marker-row"><span className="put">Put wall {data.put_wall}</span><span className="flip">Gamma flip {data.gamma_flip_lower}–{data.gamma_flip_upper}</span><span className="call">Call wall {data.call_wall}</span></div>
           <ReasonBox>{data.totals.gex < 0
             ? `Dealers are short gamma (${money(data.totals.gex)}), so hedge flows can amplify price movement. The ${data.gamma_flip_lower}–${data.gamma_flip_upper} flip range is the key boundary; behavior may become more stabilizing above it.`
@@ -90,13 +128,15 @@ export function DealerFlowDashboard({ data }: { data: Exposure | null }) {
 
         <Card title="Delta exposure" eyebrow="Directional inventory"
           className={`dealer-graph-card ${graphClass("dex")}`} action={expandButton("dex", "Delta exposure")}>
-          <div className="dealer-chart-scroll" title="Scroll horizontally to inspect the complete strike curve">
-            <div className="dealer-line-inner">
+          <ChartFrame yLabel="Y · Delta exposure ($ millions)" xLabel="X · Option strike"
+            ticks={[coordinateMoney(dexDomain[1]), coordinateMoney((dexDomain[0] + dexDomain[1]) / 2), coordinateMoney(dexDomain[0])]}
+            timestamp={data.timestamp}>
+            <div className="dealer-line-inner dealer-plot-inner">
               <LineChart values={data.curve.map(point => point.dex)} color="#60a5fa" fill interactive
                 pointLabels={strikeLabels} domain={dexDomain} seriesName="DEX"
-                valueFormatter={coordinateMoney} xAxisLabel="X · Option strike" yAxisLabel="Y · Delta exposure ($ millions)" />
+                valueFormatter={coordinateMoney} />
             </div>
-          </div>
+          </ChartFrame>
           <ReasonBox>{data.totals.dex < 0
             ? `Negative total DEX (${money(data.totals.dex)}) indicates net short directional inventory. Large troughs identify strikes where dealer hedge demand is most concentrated.`
             : `Positive total DEX (${money(data.totals.dex)}) indicates net long directional inventory. Peaks identify strikes carrying the strongest directional exposure.`}</ReasonBox>
@@ -105,17 +145,19 @@ export function DealerFlowDashboard({ data }: { data: Exposure | null }) {
         <Card title="Volatility Greeks" eyebrow="Vega / Theta / Rho"
           className={`dealer-graph-card ${graphClass("vol")}`} action={expandButton("vol", "Volatility Greeks")}>
           <div className="legend"><span><i className="vega" /> Vega</span><span><i className="theta" /> Theta</span><span><i className="rho" /> Rho</span></div>
-          <div className="dealer-chart-scroll" title="Scroll horizontally to inspect the complete strike curve">
-            <div className="dealer-line-inner">
+          <ChartFrame yLabel="Y · Greek exposure ($ millions)" xLabel="X · Option strike"
+            ticks={[coordinateMoney(volDomain[1]), coordinateMoney((volDomain[0] + volDomain[1]) / 2), coordinateMoney(volDomain[0])]}
+            timestamp={data.timestamp}>
+            <div className="dealer-line-inner dealer-plot-inner">
               <LineChart values={data.curve.map(point => point.vex)} color="#d98cff" interactive
                 pointLabels={strikeLabels} domain={volDomain} seriesName="Vega" valueFormatter={coordinateMoney}
                 extraSeries={[
                   { name: "Theta", values: data.curve.map(point => point.tex), color: "#ffb454" },
                   { name: "Rho", values: data.curve.map(point => point.rex), color: "#60a5fa" }
                 ]}
-                xAxisLabel="X · Option strike" yAxisLabel="Y · Greek exposure ($ millions)" />
+              />
             </div>
-          </div>
+          </ChartFrame>
           <ReasonBox>Vega is currently {money(data.totals.vex)} and Theta is {money(data.totals.tex)}. Spikes show strikes with concentrated sensitivity; aligned Vega, Theta, and Rho peaks deserve the most attention because several hedge drivers are concentrated together.</ReasonBox>
         </Card>
 
