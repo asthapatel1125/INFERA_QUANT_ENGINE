@@ -6,7 +6,7 @@ export function AlertsDashboard({ alerts, live }: { alerts: Alert[]; live: Alert
   const rows = live?.active && !alerts.some(x => x.timestamp === live.timestamp) ? [live, ...alerts] : alerts;
   return (
     <div className="dashboard-grid alerts-layout">
-      <Card className="wide-card" title="Signal alerts" eyebrow="Validated opportunities" action={<button className="filter-button"><Filter size={14} /> Filter</button>}>
+      <Card className="wide-card" title="Signal alerts" eyebrow="Validated opportunities" action={<button className="filter-button" title="Filter the alert history"><Filter size={14} /> Filter</button>}>
         <div className="alerts-table-wrap">
           <table>
             <thead><tr><th>Timestamp</th><th>Tier</th><th>Direction</th><th>Zone</th><th>Precision</th><th>Explosion</th></tr></thead>
@@ -34,4 +34,3 @@ export function AlertsDashboard({ alerts, live }: { alerts: Alert[]; live: Alert
     </div>
   );
 }
-

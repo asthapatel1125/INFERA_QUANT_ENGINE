@@ -15,10 +15,20 @@ const zoneColor: Record<string, string> = {
 const number = (value: number, signed = false) =>
   `${signed && value > 0 ? "+" : ""}${value.toFixed(3)}`;
 
-function Metric({ label, value, hint, color }: {
-  label: string; value: string; hint?: string; color?: string;
+const formatTime = (timestamp: string) => new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York", hour: "numeric", minute: "2-digit", second: "2-digit",
+  hour12: true, timeZoneName: "short"
+}).format(new Date(timestamp));
+
+const formatDateTime = (timestamp: string) => new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York", month: "numeric", day: "numeric", year: "numeric",
+  hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true
+}).format(new Date(timestamp));
+
+function Metric({ label, value, hint, color, explanation }: {
+  label: string; value: string; hint?: string; color?: string; explanation?: string;
 }) {
-  return <div className="zone-metric">
+  return <div className="zone-metric" title={explanation || `${label}: ${value}`}>
     <span>{label}</span><strong style={{ color }}>{value}</strong>{hint && <small>{hint}</small>}
   </div>;
 }
@@ -34,7 +44,7 @@ function HistoryTable({ history }: { history: Zone[] }) {
       <thead><tr><th>Time</th><th>Greek regime</th><th>Time regime</th><th>Volatility</th><th>Micro stability</th><th>Combined score</th></tr></thead>
       <tbody>{[...history].reverse().map((item, index) =>
         <tr key={`${item.timestamp}-${index}`}>
-          <td>{new Date(item.timestamp).toLocaleTimeString()}</td>
+          <td>{formatTime(item.timestamp)}</td>
           <td>{item.determination.greek_regime}</td>
           <td>{item.determination.time_regime}</td>
           <td>{item.determination.volatility_regime}</td>
@@ -47,9 +57,12 @@ function HistoryTable({ history }: { history: Zone[] }) {
 
 function ZoneHistory({ history }: { history: Zone[] }) {
   const transitions = history.map((item, index) => ({ item, index })).filter(({ item }) => item.transition_flag);
+  const timeLabels = history.map(item => formatTime(item.timestamp));
   return <div className="zone-stream-chart">
     <div className="tod-shading"><span>OPEN</span><span>MORNING</span><span>MIDDAY</span><span>AFTERNOON</span><span>CLOSE</span></div>
-    <LineChart values={history.map(item => item.stability)} color="#94ff70" fill />
+    <LineChart values={history.map(item => item.stability)} color="#94ff70" fill interactive
+      domain={[0, 1]} pointLabels={timeLabels} pointNames={history.map(item => item.zone)}
+      yAxisLabel="Y · Stability (0–1)" xAxisLabel="X · Sample time (Eastern)" />
     <div className="transition-overlay">{transitions.map(({ item, index }) =>
       <i key={`${item.timestamp}-${index}`} style={{ left: `${index / Math.max(history.length - 1, 1) * 100}%` }} title={`Transition: ${item.zone}`} />)}</div>
     <div className="zone-regime-strip">{history.map((item, index) =>
@@ -67,11 +80,11 @@ export function ZoneDashboard({ zone, history }: { zone: Zone | null; history: Z
       <div className="section-heading"><div><span>01 · Zone summary</span><h2>Current classification</h2></div><em><Radio size={12} /> streaming</em></div>
       <div className="zone-summary-grid">
         <Metric label="Current zone" value={zone.zone.replace("_", " ")} hint={`${zone.symbol} · ${zone.spot.toFixed(2)}`} color={color} />
-        <Metric label="Zone stability" value={zone.stability.toFixed(3)} hint={`${Math.round(zone.stability * 100)}% confidence`} />
-        <Metric label="Transition flag" value={zone.transition_flag ? "TRUE" : "FALSE"} hint={`Candidate ${zone.candidate_samples}/3`} color={zone.transition_flag ? "#ffb454" : "#94ff70"} />
-        <Metric label="Timestamp" value={new Date(zone.timestamp).toLocaleDateString()} hint={new Date(zone.timestamp).toLocaleTimeString()} />
-        <Metric label="Current hour" value={zone.time_context.current_hour} hint="America/New_York" />
-        <Metric label="Session phase" value={zone.time_context.session_phase} hint={zone.time_context.session_bias} color="#60a5fa" />
+        <Metric label="Zone stability" value={zone.stability.toFixed(3)} hint={`${Math.round(zone.stability * 100)}% confidence`} explanation="Persistence score from 0 to 1. Higher means the current zone has remained consistent." />
+        <Metric label="Transition flag" value={zone.transition_flag ? "TRUE" : "FALSE"} hint={`Candidate ${zone.candidate_samples}/3`} color={zone.transition_flag ? "#ffb454" : "#94ff70"} explanation="TRUE while a different candidate zone is being confirmed over three samples." />
+        <Metric label="Timestamp" value={new Date(zone.timestamp).toLocaleDateString()} hint={formatTime(zone.timestamp)} explanation="Time of the most recent streamed market sample." />
+        <Metric label="Current hour" value={formatTime(zone.timestamp)} hint="America/New_York" explanation="Current market time in New York, displayed in 12-hour format." />
+        <Metric label="Session phase" value={zone.time_context.session_phase} hint={zone.time_context.session_bias} color="#60a5fa" explanation="Time-of-day regime used to adjust the zone decision." />
       </div>
       <Card className="zone-reason-card">
         <div className="reason-layout">
@@ -80,6 +93,10 @@ export function ZoneDashboard({ zone, history }: { zone: Zone | null; history: Z
           </div>
           <div><span className="eyebrow">Why this zone was chosen</span><h2>{zone.determination.greek_regime.toLowerCase()} Greeks, {zone.determination.volatility_regime.toLowerCase()} volatility, and {zone.microstructure_context.regime.toLowerCase()} market quality.</h2>
             <div className="why-list">{zone.why.map(reason => <p key={reason}><Check size={13} />{reason}</p>)}</div>
+            <div className="decision-reasoning">
+              <b>How the values produced this result</b>
+              <span>Greek regime <strong>{zone.determination.greek_regime}</strong> sets directional and convexity pressure; volatility <strong>{zone.determination.volatility_regime}</strong> determines expansion versus compression; microstructure stability <strong>{zone.determination.microstructure_stability.toFixed(3)}</strong> measures confirmation; and the <strong>{zone.time_context.session_bias}</strong> time bias adjusts the combined score to <strong>{zone.determination.combined_zone_score.toFixed(3)}</strong>.</span>
+            </div>
           </div>
         </div>
       </Card>
@@ -89,7 +106,7 @@ export function ZoneDashboard({ zone, history }: { zone: Zone | null; history: Z
       <div className="section-heading"><div><span>02 · Zone change details</span><h2>Latest transition snapshot</h2></div></div>
       <Card className={`change-event ${event ? "" : "no-event"}`}>
         {event ? <>
-          <div className="change-title"><div><GitCommitHorizontal /><span>Zone change event<small>{new Date(event.timestamp).toLocaleString()}</small></span></div>
+          <div className="change-title"><div><GitCommitHorizontal /><span>Zone change event<small>{formatDateTime(event.timestamp)}</small></span></div>
             <strong style={{ color: zoneColor[event.from_zone] }}>{event.from_zone}</strong><ArrowRight /><strong style={{ color: zoneColor[event.to_zone] }}>{event.to_zone}</strong>
           </div>
           <div className="change-columns">
@@ -108,7 +125,7 @@ export function ZoneDashboard({ zone, history }: { zone: Zone | null; history: Z
               ["Liquidity score", number(event.microstructure.liquidity_score)], ["Micro stability", number(event.microstructure.microstructure_stability)]
             ]} /></div>
             <div><h4>Time context at change</h4><DetailList values={[
-              ["Current hour", event.time.current_hour], ["Session phase", event.time.session_phase], ["Session bias", event.time.session_bias]
+              ["Current hour", formatTime(event.timestamp)], ["Session phase", event.time.session_phase], ["Session bias", event.time.session_bias]
             ]} /></div>
           </div>
         </> : <div className="waiting-event"><CircleDot /><b>No confirmed zone change yet</b><span>The engine is tracking the current candidate. This panel will freeze all causal values when the three-sample transition rule confirms a new zone.</span></div>}
@@ -140,7 +157,7 @@ export function ZoneDashboard({ zone, history }: { zone: Zone | null; history: Z
     <div className="dashboard-grid zone-context-grid">
       <section className="zone-section">
         <div className="section-heading"><div><span>06 · Time-of-day intelligence</span><h2>Session context</h2></div><Clock3 size={16} /></div>
-        <Card><DetailList values={[["Current hour", zone.time_context.current_hour], ["Session phase", zone.time_context.session_phase], ["Session bias", zone.time_context.session_bias]]} />
+        <Card><DetailList values={[["Current hour", formatTime(zone.timestamp)], ["Session phase", zone.time_context.session_phase], ["Session bias", zone.time_context.session_bias]]} />
           <div className="expected-behavior"><Info size={15} /><p><b>Expected behavior</b>{zone.time_context.expected_behavior}</p></div>
         </Card>
       </section>
@@ -178,7 +195,7 @@ export function ZoneDashboard({ zone, history }: { zone: Zone | null; history: Z
       <Card className="wide-card zone-table-card"><div className="zone-table-scroll"><table className="zone-table">
         <thead><tr><th>Timestamp</th><th>Zone</th><th>Stability</th><th>Transition</th><th>Gamma slope</th><th>IV expansion</th><th>Quote imbalance</th></tr></thead>
         <tbody>{[...history].reverse().map((item, index) => <tr key={`${item.timestamp}-ledger-${index}`}>
-          <td>{new Date(item.timestamp).toLocaleString()}</td><td style={{ color: zoneColor[item.zone] }}>{item.zone}</td>
+          <td>{formatDateTime(item.timestamp)}</td><td style={{ color: zoneColor[item.zone] }}>{item.zone}</td>
           <td>{item.stability.toFixed(3)}</td><td>{item.transition_flag ? "TRUE" : "FALSE"}</td>
           <td>{number(item.greeks.gamma_slope, true)}</td><td>{item.volatility_context.iv_expansion.toFixed(3)}</td>
           <td>{number(item.microstructure_context.quote_imbalance, true)}</td>
